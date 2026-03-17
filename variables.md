@@ -1,8 +1,3 @@
-AIzaSyAj4kKQpguek1_N3HaPC4Y75JXfS8tJwxs
+Ai- studio - google : AIzaSyALUrHffPoppwgpm7A0G9wyrAdRdKLSMYM
 
-
-0OOXXDD3YIBLX48E
-
-
-
-d6pcqi1r01qo88ainclgd6pcqi1r01qo88aincm0
+finhub - d6sq8apr01qoqoir2mc0d6sq8apr01qoqoir2mcg
