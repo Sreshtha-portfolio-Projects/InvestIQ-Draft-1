@@ -2,6 +2,8 @@
 
 Follow this guide end-to-end to get InvestIQ running locally in under 15 minutes.
 
+> **Deploying to production?** See **[DEPLOYMENT.md](DEPLOYMENT.md)** for deploying the backend on **Render** and the frontend on **Vercel**.
+
 ---
 
 ## Step 1: Get Your API Keys
