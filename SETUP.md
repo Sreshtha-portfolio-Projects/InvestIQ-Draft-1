@@ -183,6 +183,21 @@ GET http://localhost:4000/health
 ```
 Should return: `{ "status": "healthy" }`
 
+### API Documentation (Swagger)
+Visit the interactive API documentation at:
+```
+http://localhost:4000/api-docs
+```
+
+The Swagger UI provides:
+- Complete API reference for all endpoints
+- Interactive "Try it out" feature to test endpoints
+- Request/response examples
+- Schema definitions
+- Authentication support
+
+See [`backend/SWAGGER.md`](backend/SWAGGER.md) for detailed usage instructions.
+
 ### Test the flow
 1. Go to `http://localhost:3000/signup` → create an account
 2. You'll land on the **Dashboard** — market indices and trending stocks should appear
