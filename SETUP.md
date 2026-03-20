@@ -2,7 +2,7 @@
 
 Follow this guide end-to-end to get InvestIQ running locally in under 15 minutes.
 
-> **Deploying to production?** See **[DEPLOYMENT.md](DEPLOYMENT.md)** for deploying the backend on **Render** and the frontend on **Vercel**.
+> **Deploying to production?** See **[DEPLOYMENT.md](DEPLOYMENT.md)** for deploying with **Docker on Oracle VPS** or any cloud provider.
 
 ---
 

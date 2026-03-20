@@ -1,240 +1,641 @@
-# InvestIQ — Deploy on Render + Vercel
+# InvestIQ — Deploy on Oracle VPS with Docker
 
-This guide walks you through deploying InvestIQ to production:
+This guide walks you through deploying InvestIQ to production on an Oracle Cloud VPS (or any Linux VPS) using Docker.
 
-- **Backend (API)** → [Render](https://render.com) — Node.js Web Service  
-- **Frontend** → [Vercel](https://vercel.com) — Next.js
-
-You should already have:
-
-- A Supabase project (database + auth)
-- Gemini API key
-- Finnhub API key  
-- The database schema applied in Supabase (see [SETUP.md](SETUP.md))
+**Architecture:**
+- **Backend API** → Docker container (Node.js)
+- **Frontend** → Docker container (Next.js)
+- **Nginx** → Reverse proxy with SSL
+- **Database** → Supabase (hosted)
 
 ---
 
-## Overview
+## Prerequisites
 
-| Component | Host    | URL you get                         |
-|----------|---------|-------------------------------------|
-| Backend  | Render  | `https://investiq-api.onrender.com` (example) |
-| Frontend | Vercel  | `https://investiq.vercel.app` (example)       |
+Before you begin, you need:
 
-After deployment you will:
-
-1. Set the backend’s `FRONTEND_URL` to your Vercel URL (for CORS).
-2. Set the frontend’s `NEXT_PUBLIC_API_URL` to your Render API URL.
+- [ ] **Oracle Cloud VPS** (or any Linux VPS - Ubuntu 20.04/22.04 recommended)
+- [ ] **Domain name** pointed to your VPS IP address
+- [ ] **Supabase project** with database schema applied (see [SETUP.md](SETUP.md))
+- [ ] **API Keys**: Gemini, Finnhub
+- [ ] **SSH access** to your VPS
 
 ---
 
-## Part 1: Deploy Backend on Render
+## Part 1: Set Up Oracle Cloud VPS
 
-### 1.1 Create a Web Service
+### 1.1 Create Oracle Cloud Instance
 
-1. Go to [dashboard.render.com](https://dashboard.render.com) and sign in (or sign up with GitHub).
-2. Click **New** → **Web Service**.
-3. Connect your GitHub account if needed, then select the **InvestIQ** repository.
-4. Configure the service:
+1. Go to [cloud.oracle.com](https://cloud.oracle.com) and sign in
+2. Navigate to **Compute** → **Instances** → **Create Instance**
+3. Configure:
+   - **Name**: `investiq-server`
+   - **Image**: Ubuntu 22.04
+   - **Shape**: VM.Standard.E2.1.Micro (free tier) or better
+   - **Network**: Create or select VCN
+   - **Add SSH Keys**: Upload your public SSH key
+4. Click **Create**
 
-| Field | Value |
-|-------|--------|
-| **Name** | `investiq-api` (or any name you like) |
-| **Region** | Choose one close to your users |
-| **Branch** | `main` (or your default branch) |
-| **Root Directory** | `backend` |
-| **Runtime** | `Node` |
-| **Build Command** | `npm install && npm run build` |
-| **Start Command** | `npm start` |
-| **Instance Type** | Free (or paid for always-on) |
+### 1.2 Configure Firewall Rules
 
-5. Click **Advanced** and add the environment variables below.
+In Oracle Cloud Console:
 
-### 1.2 Backend Environment Variables on Render
+1. Go to **Networking** → **Virtual Cloud Networks**
+2. Select your VCN → **Security Lists** → **Default Security List**
+3. Add **Ingress Rules**:
 
-In **Environment** (or **Environment Variables**), add:
+| Source CIDR | Protocol | Port Range | Description |
+|-------------|----------|------------|-------------|
+| 0.0.0.0/0   | TCP      | 80         | HTTP        |
+| 0.0.0.0/0   | TCP      | 443        | HTTPS       |
+| 0.0.0.0/0   | TCP      | 22         | SSH         |
 
-| Key | Value | Notes |
-|-----|--------|--------|
-| `PORT` | `4000` | Render sets this automatically; you can leave it. |
-| `NODE_ENV` | `production` | |
-| `FRONTEND_URL` | `https://your-app.vercel.app` | **Set this after deploying the frontend.** Use your real Vercel URL, no trailing slash. |
-| `SUPABASE_URL` | `https://xxxx.supabase.co` | From Supabase → Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` | From Supabase → Settings → API (service_role) |
-| `SUPABASE_ANON_KEY` | `eyJ...` | From Supabase → Settings → API (anon public) |
-| `GEMINI_API_KEY` | `AIzaSy...` | From [aistudio.google.com](https://aistudio.google.com) |
-| `FINNHUB_API_KEY` | `cv1...` | From [finnhub.io](https://finnhub.io) |
+### 1.3 Configure UFW Firewall on VPS
 
-For the first deploy you can set `FRONTEND_URL` to `https://your-app.vercel.app` (replace with the Vercel URL you’ll use), or use a placeholder and update it after the frontend is live.
+SSH into your VPS and run:
 
-### 1.3 Deploy
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
 
-Click **Create Web Service**. Render will build and deploy. When it’s done, note your backend URL, e.g.:
-
-```text
-https://investiq-api.onrender.com
+# Configure UFW firewall
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 80/tcp    # HTTP
+sudo ufw allow 443/tcp   # HTTPS
+sudo ufw enable
 ```
 
-Use this as the base for the API (e.g. `https://investiq-api.onrender.com/api` for your API routes).
-
-### 1.4 (Optional) Render Blueprint — `render.yaml`
-
-The repo includes a **Blueprint** at the root: `render.yaml`. You can use it to define the backend service as code:
-
-1. In Render dashboard: **New** → **Blueprint**.
-2. Connect the same repo; Render will detect `render.yaml`.
-3. Add the same environment variables in the Render UI (Blueprint does not store secrets).
-4. Deploy.
-
-This keeps service config in version control.
-
 ---
 
-## Part 2: Deploy Frontend on Vercel
+## Part 2: Install Docker on VPS
 
-### 2.1 Import the Project
+### 2.1 Install Docker Engine
 
-1. Go to [vercel.com](https://vercel.com) and sign in (e.g. with GitHub).
-2. Click **Add New** → **Project**.
-3. Import the **InvestIQ** repository.
-4. Configure the project:
+```bash
+# Install dependencies
+sudo apt install -y ca-certificates curl gnupg lsb-release
 
-| Field | Value |
-|-------|--------|
-| **Framework Preset** | Next.js (auto-detected) |
-| **Root Directory** | `frontend` — click **Edit** and set to `frontend`. |
-| **Build Command** | `npm run build` (default) |
-| **Output Directory** | (leave default) |
-| **Install Command** | `npm install` (default) |
+# Add Docker's official GPG key
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-### 2.2 Frontend Environment Variables on Vercel
+# Set up Docker repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-In **Environment Variables**, add:
+# Install Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-| Key | Value | Environment |
-|-----|--------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxxx.supabase.co` | Production, Preview, Development |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJ...` (anon only) | Production, Preview, Development |
-| `NEXT_PUBLIC_API_URL` | `https://investiq-api.onrender.com/api` | Production, Preview, Development |
-
-Use your **actual** Render backend URL (with `/api` at the end). Example:
-
-```text
-NEXT_PUBLIC_API_URL=https://investiq-api.onrender.com/api
+# Verify installation
+docker --version
+docker compose version
 ```
 
-### 2.3 Deploy
+### 2.2 Configure Docker Permissions
 
-Click **Deploy**. When the build finishes, Vercel will show your frontend URL, e.g.:
+```bash
+# Add your user to docker group
+sudo usermod -aG docker $USER
 
-```text
-https://investiq-xxxx.vercel.app
+# Apply group membership (or logout and login again)
+newgrp docker
+
+# Verify Docker works without sudo
+docker ps
 ```
 
-(or your custom domain if you added one).
+---
+
+## Part 3: Deploy InvestIQ Application
+
+### 3.1 Clone Repository on VPS
+
+```bash
+# Create application directory
+mkdir -p ~/apps
+cd ~/apps
+
+# Clone your repository (replace with your repo URL)
+git clone https://github.com/yourusername/InvestIQ.git
+cd InvestIQ
+
+# Or if you're uploading files manually:
+# Create the directory structure and upload files via SCP/SFTP
+```
+
+### 3.2 Configure Environment Variables
+
+```bash
+# Copy example environment file
+cp .env.example .env
+
+# Edit environment file
+nano .env
+```
+
+Set these values in `.env`:
+
+```env
+# Frontend URL - your domain or VPS IP
+FRONTEND_URL=https://yourdomain.com
+
+# Backend API URL - should point to your domain with /api path
+NEXT_PUBLIC_API_URL=https://yourdomain.com/api
+
+# Supabase Configuration
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+SUPABASE_ANON_KEY=your-anon-key-here
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+
+# API Keys
+GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+FINNHUB_API_KEY=cv1abc2ad3i6rxxxxxxxx
+```
+
+**Important:**
+- Replace `yourdomain.com` with your actual domain
+- Use the Supabase keys from your Supabase dashboard
+- Never commit `.env` to git (it's already in `.gitignore`)
+
+### 3.3 Configure Nginx for Your Domain
+
+Edit the Nginx configuration:
+
+```bash
+nano nginx/conf.d/investiq.conf
+```
+
+Replace `yourdomain.com` with your actual domain in all locations (3 places).
+
+### 3.4 Initial Deployment (HTTP Only)
+
+First, deploy without SSL to verify everything works:
+
+```bash
+# Make deploy script executable
+chmod +x deploy.sh
+
+# Run deployment
+./deploy.sh
+```
+
+This will:
+- Build Docker images for backend and frontend
+- Start all containers
+- Run health checks
+
+**Verify deployment:**
+
+```bash
+# Check container status
+docker compose ps
+
+# View logs
+docker compose logs -f
+
+# Test backend
+curl http://localhost:4000/health
+
+# Test frontend
+curl http://localhost:3000
+```
+
+Access your application at `http://your-vps-ip:3000`
 
 ---
 
-## Part 3: Connect Frontend and Backend
+## Part 4: Set Up SSL with Let's Encrypt
 
-### 3.1 Set Backend CORS (FRONTEND_URL)
+### 4.1 Point Your Domain to VPS
 
-1. In **Render** → your backend service → **Environment**.
-2. Set **FRONTEND_URL** to your **exact** Vercel app URL, **no trailing slash**:
+Before setting up SSL, ensure your domain DNS is configured:
 
-   ```text
-   https://investiq-xxxx.vercel.app
-   ```
+1. In your domain registrar (GoDaddy, Namecheap, etc.)
+2. Add **A Record**:
+   - **Host**: `@` (or your subdomain)
+   - **Value**: Your VPS IP address
+   - **TTL**: 3600
+3. Add **A Record** for www:
+   - **Host**: `www`
+   - **Value**: Your VPS IP address
+   - **TTL**: 3600
 
-   If you use a custom domain for the frontend, use that instead.
+Wait 5-10 minutes for DNS propagation. Verify:
 
-3. Save. Render will redeploy with the new env.
+```bash
+# Should show your VPS IP
+nslookup yourdomain.com
 
-### 3.2 (Optional) Vercel config
+# Or use ping
+ping yourdomain.com
+```
 
-If you use a custom domain or need rewrites, you can add `frontend/vercel.json`. For a standard Next.js app with root directory `frontend`, the default settings are usually enough.
+### 4.2 Obtain SSL Certificate
+
+Edit the SSL setup script:
+
+```bash
+nano ssl-setup.sh
+```
+
+Update these lines with your actual values:
+```bash
+DOMAIN="yourdomain.com"
+EMAIL="your-email@example.com"
+```
+
+Run the SSL setup:
+
+```bash
+# Make script executable
+chmod +x ssl-setup.sh
+
+# Run SSL setup
+./ssl-setup.sh
+```
+
+This will:
+- Request SSL certificate from Let's Encrypt
+- Configure automatic renewal
+- Reload Nginx with HTTPS
+
+### 4.3 Verify SSL Configuration
+
+Access your application at `https://yourdomain.com`
+
+Check certificate:
+```bash
+# Should show certificate details
+curl -vI https://yourdomain.com 2>&1 | grep -A 10 "SSL certificate"
+```
 
 ---
 
-## Part 4: Verify Production
+## Part 5: Verify Production Deployment
 
-### 4.1 Backend
+### 5.1 Test Backend API
 
-- Health: open `https://your-backend.onrender.com/health` — should return `{"status":"healthy"}`.
-- API docs: open `https://your-backend.onrender.com/api-docs` — Swagger UI should load.
+```bash
+# Health check
+curl https://yourdomain.com/health
 
-### 4.2 Frontend
+# Should return: {"status":"healthy"}
 
-- Open your Vercel URL (e.g. `https://investiq-xxxx.vercel.app`).
-- Sign up / sign in (Supabase auth).
-- Use the dashboard, search, screener, and AI research — all should call the Render API.
+# API documentation
+# Open in browser: https://yourdomain.com/api-docs
+```
 
-### 4.3 If the frontend shows “network error” or CORS errors
+### 5.2 Test Frontend
 
-- Confirm **FRONTEND_URL** on Render matches the Vercel URL exactly (no trailing slash).
-- Confirm **NEXT_PUBLIC_API_URL** on Vercel is `https://your-backend.onrender.com/api`.
-- Redeploy backend after changing **FRONTEND_URL**; redeploy frontend after changing **NEXT_PUBLIC_API_URL** if needed.
+1. Open `https://yourdomain.com` in your browser
+2. Sign up / sign in with Supabase auth
+3. Test features:
+   - Dashboard loads with market data
+   - Stock search works
+   - AI screener responds
+   - Stock details page loads
+
+### 5.3 Check Container Health
+
+```bash
+# View all containers
+docker compose ps
+
+# Should show all as "healthy" or "Up"
+
+# Check logs for errors
+docker compose logs backend | tail -50
+docker compose logs frontend | tail -50
+docker compose logs nginx | tail -50
+```
 
 ---
 
-## Environment Variables Reference (Production)
+## Part 6: Maintenance & Updates
 
-### Backend (Render)
+### 6.1 View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f nginx
+
+# Last 100 lines
+docker compose logs --tail=100
+```
+
+### 6.2 Update Application
+
+When you make code changes:
+
+```bash
+cd ~/apps/InvestIQ
+
+# Pull latest changes
+git pull origin main
+
+# Rebuild and restart
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+
+# Verify
+docker compose ps
+```
+
+Or use the deploy script:
+
+```bash
+./deploy.sh
+```
+
+### 6.3 Restart Services
+
+```bash
+# Restart all
+docker compose restart
+
+# Restart specific service
+docker compose restart backend
+docker compose restart frontend
+```
+
+### 6.4 Stop Services
+
+```bash
+# Stop all containers
+docker compose down
+
+# Stop and remove volumes (WARNING: deletes data)
+docker compose down -v
+```
+
+### 6.5 Monitor Resource Usage
+
+```bash
+# Container resource usage
+docker stats
+
+# Disk usage
+docker system df
+
+# Clean up unused images
+docker image prune -a
+```
+
+---
+
+## Troubleshooting
+
+### Issue: Containers won't start
+
+**Solution:**
+```bash
+# Check logs
+docker compose logs
+
+# Check if ports are in use
+sudo netstat -tulpn | grep -E ':(80|443|3000|4000)'
+
+# Rebuild from scratch
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Issue: SSL certificate failed
+
+**Solution:**
+```bash
+# Verify domain points to VPS
+nslookup yourdomain.com
+
+# Check if port 80 is accessible
+curl -I http://yourdomain.com
+
+# Try manual certificate request
+docker compose run --rm certbot certonly --webroot \
+  --webroot-path=/var/www/certbot \
+  --email your-email@example.com \
+  --agree-tos \
+  -d yourdomain.com \
+  -d www.yourdomain.com
+```
+
+### Issue: "CORS error" in frontend
+
+**Solution:**
+```bash
+# Verify FRONTEND_URL in .env matches your domain exactly
+grep FRONTEND_URL .env
+
+# Should be: FRONTEND_URL=https://yourdomain.com (no trailing slash)
+
+# Restart backend
+docker compose restart backend
+```
+
+### Issue: Frontend shows "API not reachable"
+
+**Solution:**
+```bash
+# Check NEXT_PUBLIC_API_URL in .env
+grep NEXT_PUBLIC_API_URL .env
+
+# Should be: NEXT_PUBLIC_API_URL=https://yourdomain.com/api
+
+# Rebuild frontend
+docker compose up -d --build frontend
+```
+
+### Issue: Out of disk space
+
+**Solution:**
+```bash
+# Check disk usage
+df -h
+
+# Clean Docker resources
+docker system prune -a --volumes
+
+# Check log sizes
+du -sh /var/lib/docker/containers/*/*-json.log
+```
+
+### Issue: Backend crashes / restarts frequently
+
+**Solution:**
+```bash
+# Check backend logs
+docker compose logs backend
+
+# Common causes:
+# 1. Invalid API keys in .env
+# 2. Supabase connection issues
+# 3. Out of memory
+
+# Check container resources
+docker stats investiq-backend
+```
+
+---
+
+## Environment Variables Reference
+
+### Backend (via .env)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `PORT` | Server port (Render sets this) | `4000` |
-| `NODE_ENV` | Environment | `production` |
-| `FRONTEND_URL` | Allowed CORS origin (Vercel app URL) | `https://investiq.vercel.app` |
-| `SUPABASE_URL` | Supabase project URL | Supabase → Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (backend only) | Supabase → Settings → API |
-| `SUPABASE_ANON_KEY` | Anon key | Supabase → Settings → API |
-| `GEMINI_API_KEY` | Google Gemini API key | aistudio.google.com |
-| `FINNHUB_API_KEY` | Finnhub API key | finnhub.io |
+| `PORT` | Backend port (internal) | `4000` |
+| `NODE_ENV` | Environment mode | `production` |
+| `FRONTEND_URL` | CORS origin (your domain) | `https://yourdomain.com` |
+| `SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key | `eyJ...` |
+| `SUPABASE_ANON_KEY` | Anon public key | `eyJ...` |
+| `GEMINI_API_KEY` | Google Gemini API key | `AIzaSy...` |
+| `FINNHUB_API_KEY` | Finnhub API key | `cv1...` |
 
-### Frontend (Vercel)
+### Frontend (via .env)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Supabase → Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key only | Supabase → Settings → API |
-| `NEXT_PUBLIC_API_URL` | Backend API base URL | `https://investiq-api.onrender.com/api` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key only | `eyJ...` |
+| `NEXT_PUBLIC_API_URL` | Backend API URL | `https://yourdomain.com/api` |
 
 ---
 
-## Free Tier Notes
+## Security Best Practices
 
-### Render (backend)
+### 1. Keep System Updated
 
-- Free instances spin down after ~15 minutes of no traffic; the first request after that may take 30–60 seconds (cold start).
-- For always-on, use a paid instance.
+```bash
+# Update system packages regularly
+sudo apt update && sudo apt upgrade -y
 
-### Vercel (frontend)
+# Update Docker images
+docker compose pull
+docker compose up -d
+```
 
-- Generous free tier for Next.js; preview deployments for every push.
+### 2. Use Strong Passwords
 
-### Supabase / Gemini / Finnhub
+- Supabase database password
+- Oracle Cloud console password
+- SSH key passphrase
 
-- Use the same free tiers as in [SETUP.md](SETUP.md); no extra config for production.
+### 3. Limit SSH Access
+
+```bash
+# Disable password authentication
+sudo nano /etc/ssh/sshd_config
+
+# Set: PasswordAuthentication no
+# Restart SSH
+sudo systemctl restart sshd
+```
+
+### 4. Monitor Logs
+
+```bash
+# Set up log rotation
+sudo nano /etc/docker/daemon.json
+```
+
+Add:
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+```
+
+```bash
+# Restart Docker
+sudo systemctl restart docker
+```
+
+### 5. Backup Database
+
+Supabase provides automatic backups, but you can also:
+
+```bash
+# Export database via Supabase dashboard
+# Or use pg_dump if you have direct database access
+```
 
 ---
 
 ## Quick Deployment Checklist
 
-- [ ] Supabase project created and `schema.sql` applied  
-- [ ] Render Web Service created, **Root Directory** = `backend`  
-- [ ] All backend env vars set on Render (including `FRONTEND_URL` after frontend is live)  
-- [ ] Backend deploy successful; health URL returns `{"status":"healthy"}`  
-- [ ] Vercel project created, **Root Directory** = `frontend`  
-- [ ] All frontend env vars set on Vercel (`NEXT_PUBLIC_API_URL` = Render API URL + `/api`)  
-- [ ] Frontend deploy successful  
-- [ ] **FRONTEND_URL** on Render set to exact Vercel URL (no trailing slash)  
-- [ ] Sign up / sign in and main flows work on production URL  
+- [ ] Oracle Cloud VPS created and configured
+- [ ] Firewall rules set up (ports 80, 443, 22)
+- [ ] Docker and Docker Compose installed
+- [ ] Domain DNS pointed to VPS IP
+- [ ] Repository cloned on VPS
+- [ ] `.env` file created with all API keys
+- [ ] Nginx config updated with domain name
+- [ ] Initial deployment successful (HTTP)
+- [ ] SSL certificate obtained and configured
+- [ ] HTTPS working and redirecting from HTTP
+- [ ] Backend health check passes
+- [ ] Frontend loads and authentication works
+- [ ] All features tested (dashboard, screener, research)
 
 ---
 
-## Optional: Custom Domains
+## Cost Estimation
 
-- **Vercel:** Project → Settings → Domains → add your domain and follow DNS instructions.
-- **Render:** Service → Settings → Custom Domain → add domain and point DNS as shown.
-- After adding a custom domain for the frontend, set **FRONTEND_URL** on Render to that domain (e.g. `https://app.investiq.com`).
+### Oracle Cloud Free Tier (Always Free)
+
+- **Compute**: 2 VMs (1/8 OCPU, 1GB RAM each) — **FREE forever**
+- **Storage**: 200GB block storage — **FREE forever**
+- **Network**: 10TB outbound transfer/month — **FREE forever**
+
+### Additional Services (Not Free)
+
+- **Supabase**: Free tier (500MB database, 50,000 monthly active users)
+- **Domain**: $10-15/year (varies by registrar)
+- **Gemini API**: Free tier (15 req/min, 1M tokens/day)
+- **Finnhub API**: Free tier (60 API calls/min)
+
+**Total monthly cost**: $0 (if staying within free tiers) + domain cost
+
+For production with higher traffic, consider:
+- Supabase Pro: $25/month
+- Oracle Cloud paid instance: ~$10-50/month
+- Finnhub paid plan: $50-300/month
+
+---
+
+## Next Steps
+
+1. **Set up monitoring**: Consider using tools like Uptime Robot for uptime monitoring
+2. **Configure backups**: Set up automated database backups
+3. **Add CI/CD**: Use GitHub Actions for automated deployments
+4. **Custom domain**: Add your custom domain instead of using IP
+5. **Email notifications**: Configure alerts for errors
+
+---
+
+## Additional Resources
+
+- [Docker Documentation](https://docs.docker.com)
+- [Oracle Cloud Documentation](https://docs.oracle.com/en-us/iaas/Content/home.htm)
+- [Let's Encrypt Documentation](https://letsencrypt.org/docs/)
+- [Nginx Documentation](https://nginx.org/en/docs/)
+
+---
+
+**Need help?** Check the [main README](README.md) or [SETUP.md](SETUP.md) for local development setup.

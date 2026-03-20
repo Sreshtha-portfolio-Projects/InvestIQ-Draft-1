@@ -236,23 +236,58 @@ Natural Language Query
 
 ---
 
-## Production Deployment
+## Deployment Options
 
-### Frontend (Vercel)
+### 🚀 Recommended: Docker + Oracle VPS (Free Forever)
+
+Deploy InvestIQ on Oracle Cloud's free tier using Docker containers:
+
+- **Cost**: $0/month forever (Oracle Always Free tier)
+- **Setup time**: ~30 minutes
+- **Guide**: See [QUICKSTART.md](QUICKSTART.md) or [DEPLOYMENT.md](DEPLOYMENT.md)
+
+```bash
+# Quick deploy on your VPS
+git clone <your-repo>
+cd InvestIQ
+cp .env.example .env
+nano .env  # Fill in your API keys
+./deploy.sh
+./ssl-setup.sh
+```
+
+**What you get:**
+- Production-ready Docker setup
+- Nginx reverse proxy with SSL
+- Automatic SSL certificate renewal
+- Health checks and auto-restart
+- Full server control
+
+### Alternative: Traditional Deployment
+
+**Frontend**: Vercel, Netlify, or any static host
 ```bash
 cd frontend
 npm run build
-# Deploy to Vercel via CLI or GitHub integration
 ```
 
-### Backend (Railway/Render)
+**Backend**: Any Node.js hosting (Railway, Render, DigitalOcean)
 ```bash
 cd backend
 npm run build
 npm start
 ```
 
-Set all environment variables in your deployment platform.
+### Local Development with Docker
+
+Alternative to manual `npm run dev`:
+
+```bash
+# Start with hot reload
+docker compose -f docker-compose.dev.yml --env-file .env.local up
+```
+
+See [DOCKER_LOCAL_DEV.md](DOCKER_LOCAL_DEV.md) for details.
 
 ---
 
