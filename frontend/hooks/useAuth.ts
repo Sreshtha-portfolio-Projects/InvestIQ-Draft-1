@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
 
@@ -16,26 +16,36 @@ export const useAuthState = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Check if user is logged in on mount and subscribe to storage changes
   useEffect(() => {
-    authService.getCurrentUser().then((u) => {
-      setUser(u);
+    const initializeAuth = async () => {
+      const currentUser = await authService.getCurrentUser();
+      setUser(currentUser);
       setLoading(false);
-    });
+    };
 
-    const { data: { subscription } } = authService.onAuthStateChange((u) => {
-      setUser(u);
-      setLoading(false);
-    });
+    initializeAuth();
 
-    return () => subscription.unsubscribe();
+    // Listen for storage changes (e.g., logout in another tab)
+    const handleStorageChange = () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await authService.signIn(email, password);
+    const data = await authService.signIn(email, password);
+    setUser(data.user || null);
   };
 
   const signUp = async (email: string, password: string, fullName?: string) => {
-    await authService.signUp(email, password, fullName);
+    const data = await authService.signUp(email, password, fullName);
+    setUser(data.user || null);
   };
 
   const signOut = async () => {

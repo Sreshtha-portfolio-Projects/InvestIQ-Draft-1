@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { supabase } from '@/lib/supabase';
+import { authService } from './authService';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -10,11 +10,11 @@ const createApiClient = (): AxiosInstance => {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  // Attach auth token to every request
-  client.interceptors.request.use(async (config) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      config.headers.Authorization = `Bearer ${session.access_token}`;
+  // Attach auth token from localStorage to every request
+  client.interceptors.request.use((config) => {
+    const token = authService.getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   });

@@ -22,8 +22,20 @@ const PORT = process.env.PORT || 4000;
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for Swagger UI
 }));
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3000',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -138,9 +150,46 @@ app.use('/api/ai', aiRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logger.info(`InvestIQ backend running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+// Keep the process alive
+server.on('close', () => {
+  logger.info('Server closed');
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', { error: String(err), stack: (err as Error).stack });
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Promise Rejection', { reason: String(reason) });
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT signal received: closing HTTP server');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+// Prevent the process from exiting
+process.stdin.resume();
 
 export default app;

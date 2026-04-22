@@ -22,7 +22,12 @@ class GeminiClient {
       const response = result.response;
       return response.text();
     } catch (err) {
-      logger.error('Gemini API error', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logger.error('Gemini API error', { 
+        error: errorMessage, 
+        stack: err instanceof Error ? err.stack : undefined,
+        hasApiKey: !!process.env.GEMINI_API_KEY 
+      });
       throw new Error('AI service temporarily unavailable. Please try again.');
     }
   }
