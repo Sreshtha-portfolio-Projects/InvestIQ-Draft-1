@@ -10,6 +10,7 @@ export const signUp = async (req: Request, res: Response): Promise<void> => {
     sendCreated(res, {
       user: data.user,
       session: data.session,
+      access_token: data.session?.access_token,
     }, 'Account created successfully');
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Sign up failed';

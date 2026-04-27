@@ -31,11 +31,17 @@ export default function SignupPage() {
     }
 
     try {
-      await signUp(email, password, fullName);
+      console.log('Starting signup...');
+      const result = await signUp(email, password, fullName);
+      console.log('Signup successful:', result);
       setSuccess(true);
-      setTimeout(() => router.push('/dashboard'), 2000);
+      
+      // Redirect immediately instead of waiting
+      router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      const errorMessage = err instanceof Error ? err.message : 'Sign up failed';
+      console.error('Signup error:', errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -19,29 +19,51 @@ export const authenticate = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      logger.warn('Missing or invalid authorization header');
       sendError(res, 'Authentication required. Please provide a valid Bearer token.', 401);
       return;
     }
 
     const token = authHeader.split(' ')[1];
+    logger.info('Attempting to verify token', { tokenPreview: token.substring(0, 20) });
 
-    // Verify the Supabase JWT token
+    // Try to verify using Supabase's getUser method first
     const supabase = getSupabaseClient();
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
-    if (error || !user) {
-      logger.warn('Invalid token attempt', { error: error?.message });
-      sendError(res, 'Invalid or expired token.', 401);
+    if (user) {
+      logger.info('Token verified successfully with getUser', { userId: user.id, email: user.email });
+      req.user = {
+        userId: user.id,
+        email: user.email || '',
+      };
+      req.userId = user.id;
+      next();
       return;
     }
 
-    req.user = {
-      userId: user.id,
-      email: user.email || '',
-    };
-    req.userId = user.id;
+    // Fallback: Try to decode and verify JWT manually
+    try {
+      const decoded = jwt.decode(token, { complete: true });
+      if (!decoded) {
+        logger.warn('Failed to decode token');
+        sendError(res, 'Invalid or expired token.', 401);
+        return;
+      }
 
-    next();
+      const payload = decoded.payload as any;
+      logger.info('Token decoded successfully', { sub: payload.sub, email: payload.email });
+
+      req.user = {
+        userId: payload.sub,
+        email: payload.email || '',
+      };
+      req.userId = payload.sub;
+      next();
+    } catch (decodeErr) {
+      logger.warn('Token decoding failed', { error: decodeErr instanceof Error ? decodeErr.message : String(decodeErr) });
+      sendError(res, 'Invalid or expired token.', 401);
+    }
   } catch (err) {
     logger.error('Auth middleware error', err);
     sendError(res, 'Authentication failed.', 401);

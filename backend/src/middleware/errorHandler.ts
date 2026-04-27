@@ -12,13 +12,17 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-  const statusCode = err.statusCode || 500;
-  const message = err.isOperational ? err.message : 'Internal server error';
+  // Temporary: always show error message
+  const statusCode = err.statusCode || (err as any).status || (err as any).statusCode || 500;
+  const message = err.message || 'Unknown error'; // Always use the message for debugging
 
   logger.error('Unhandled error', {
+    err,
     message: err.message,
     stack: err.stack,
     statusCode,
+    type: err.constructor.name,
+    properties: Object.keys(err),
   });
 
   res.status(statusCode).json({

@@ -23,10 +23,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signIn(email, password);
+      console.log('Starting signin...');
+      const result = await signIn(email, password);
+      console.log('Signin successful:', result);
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed');
+      const errorMessage = err instanceof Error ? err.message : 'Sign in failed';
+      console.error('Signin error:', errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

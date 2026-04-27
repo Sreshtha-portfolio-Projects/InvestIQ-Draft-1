@@ -15,35 +15,55 @@ const createAuthClient = () => {
 export const authService = {
   async signUp(email: string, password: string, fullName?: string) {
     const client = createAuthClient();
-    const response = await client.post('/auth/signup', {
-      email,
-      password,
-      fullName,
-    });
+    try {
+      const response = await client.post('/auth/signup', {
+        email,
+        password,
+        fullName,
+      });
 
-    // Store token in localStorage
-    if (response.data.data?.access_token) {
-      localStorage.setItem('access_token', response.data.data.access_token);
-      localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      console.log('Signup response:', response.data);
+
+      // Store token in localStorage
+      if (response.data.data?.access_token) {
+        console.log('Storing access token from signup');
+        localStorage.setItem('access_token', response.data.data.access_token);
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      } else {
+        console.warn('No access_token in signup response:', response.data.data);
+      }
+
+      return response.data.data;
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
     }
-
-    return response.data.data;
   },
 
   async signIn(email: string, password: string) {
     const client = createAuthClient();
-    const response = await client.post('/auth/signin', {
-      email,
-      password,
-    });
+    try {
+      const response = await client.post('/auth/signin', {
+        email,
+        password,
+      });
 
-    // Store token in localStorage
-    if (response.data.data?.access_token) {
-      localStorage.setItem('access_token', response.data.data.access_token);
-      localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      console.log('Signin response:', response.data);
+
+      // Store token in localStorage
+      if (response.data.data?.access_token) {
+        console.log('Storing access token from signin');
+        localStorage.setItem('access_token', response.data.data.access_token);
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      } else {
+        console.warn('No access_token in signin response:', response.data.data);
+      }
+
+      return response.data.data;
+    } catch (error) {
+      console.error('Signin error:', error);
+      throw error;
     }
-
-    return response.data.data;
   },
 
   async signOut() {
@@ -65,15 +85,27 @@ export const authService = {
   async getCurrentUser(): Promise<User | null> {
     try {
       const token = localStorage.getItem('access_token');
-      if (!token) return null;
+      console.log('Getting current user, token exists:', !!token);
+      
+      if (!token) {
+        console.log('No token in localStorage');
+        return null;
+      }
 
       const client = createAuthClient();
+      console.log('Calling /auth/me with token:', token.substring(0, 20) + '...');
+      
       const response = await client.get('/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      console.log('getCurrentUser response:', response.data);
       return response.data.data?.user || null;
-    } catch {
+    } catch (error) {
+      console.error('getCurrentUser error:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+      }
       return null;
     }
   },

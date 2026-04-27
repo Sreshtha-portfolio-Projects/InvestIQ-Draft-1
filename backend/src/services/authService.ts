@@ -41,6 +41,13 @@ export class AuthService {
     }
 
     logger.info('User signed up', { email: data.email });
+
+    // If session is null (email confirmation required), auto-sign in the user
+    if (!authData.session) {
+      logger.info('No session from signup, attempting auto-signin', { email: data.email });
+      return this.signIn(data);
+    }
+
     return authData;
   }
 
