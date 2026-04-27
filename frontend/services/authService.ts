@@ -102,10 +102,14 @@ export const authService = {
       console.log('getCurrentUser response:', response.data);
       return response.data.data?.user || null;
     } catch (error) {
-      console.error('getCurrentUser error:', error);
-      if (error instanceof Error) {
-        console.error('Error message:', error.message);
+      // Treat 401 during bootstrap as "not signed in" (commonly a stale token).
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        return null;
       }
+
+      console.error('getCurrentUser error:', error);
       return null;
     }
   },
