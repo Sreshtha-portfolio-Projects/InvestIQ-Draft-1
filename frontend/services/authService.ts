@@ -3,6 +3,26 @@ import { User } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
+const isLikelyExpiredJwt = (token: string): boolean => {
+  // Supabase access tokens are JWTs. If we can read `exp` and it's in the past,
+  // skip the network call and treat as signed out.
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+
+    // Base64url decode
+    const payloadJson = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    if (!payload?.exp) return false;
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    // Small skew to avoid edge flakiness
+    return payload.exp <= nowSec + 10;
+  } catch {
+    return false;
+  }
+};
+
 // Create a separate axios instance for auth requests (no token required initially)
 const createAuthClient = () => {
   return axios.create({
@@ -89,6 +109,12 @@ export const authService = {
       
       if (!token) {
         console.log('No token in localStorage');
+        return null;
+      }
+
+      if (isLikelyExpiredJwt(token)) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
         return null;
       }
 

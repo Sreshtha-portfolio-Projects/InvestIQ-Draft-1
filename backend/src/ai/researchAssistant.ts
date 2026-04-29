@@ -1,4 +1,4 @@
-import { geminiClient } from './geminiClient';
+import { aiClient } from './aiClient';
 import { PROMPTS } from './prompts';
 import { marketDataService } from '../market/marketDataService';
 import { getSupabaseClient } from '../db/supabase';
@@ -92,7 +92,7 @@ export class ResearchAssistantService {
       marketData
     );
 
-    const result = await geminiClient.generateJSON<ResearchResult>(prompt);
+    const result = await aiClient.generateJSON<ResearchResult>(prompt);
 
     // Cache the analysis
     if (resolvedTicker) {

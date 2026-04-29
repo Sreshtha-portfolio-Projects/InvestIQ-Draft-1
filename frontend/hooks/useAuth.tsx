@@ -1,22 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
 
-interface AuthContextType {
+interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName?: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<User | null>;
+  signUp: (email: string, password: string, fullName?: string) => Promise<User | null>;
   signOut: () => Promise<void>;
 }
 
-export const useAuthState = () => {
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is logged in on mount and subscribe to storage changes
   useEffect(() => {
     const initializeAuth = async () => {
       const currentUser = await authService.getCurrentUser();
@@ -26,12 +27,9 @@ export const useAuthState = () => {
 
     initializeAuth();
 
-    // Listen for storage changes (e.g., logout in another tab)
     const handleStorageChange = () => {
       const token = localStorage.getItem('access_token');
-      if (!token) {
-        setUser(null);
-      }
+      if (!token) setUser(null);
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -40,12 +38,16 @@ export const useAuthState = () => {
 
   const signIn = async (email: string, password: string) => {
     const data = await authService.signIn(email, password);
-    setUser(data.user || null);
+    const nextUser = data.user || null;
+    setUser(nextUser);
+    return nextUser;
   };
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     const data = await authService.signUp(email, password, fullName);
-    setUser(data.user || null);
+    const nextUser = data.user || null;
+    setUser(nextUser);
+    return nextUser;
   };
 
   const signOut = async () => {
@@ -53,5 +55,17 @@ export const useAuthState = () => {
     setUser(null);
   };
 
-  return { user, loading, signIn, signUp, signOut };
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, loading, signIn, signUp, signOut }),
+    [user, loading]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
+export const useAuth = (): AuthContextValue => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
+};
+

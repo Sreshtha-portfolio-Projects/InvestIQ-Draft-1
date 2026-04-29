@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { TrendingUp, Search, Bell, User, LogOut, Menu, X, BarChart2, BookMarked, ScanSearch } from 'lucide-react';
-import { useAuthState } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { StockSearchBar } from '@/components/stocks/StockSearchBar';
 
@@ -15,7 +15,7 @@ const navLinks = [
 ];
 
 export const Navbar = () => {
-  const { user, signOut } = useAuthState();
+  const { user, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);

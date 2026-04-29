@@ -1,4 +1,4 @@
-import { geminiClient } from './geminiClient';
+import { aiClient } from './aiClient';
 import { PROMPTS } from './prompts';
 import { getSupabaseClient } from '../db/supabase';
 import { ScreenerFilters, Company } from '../types';
@@ -27,7 +27,7 @@ export class ScreenerInterpreterService {
   async screen(userQuery: string): Promise<ScreenerResult> {
     // Step 1: Use AI to interpret the natural language query
     const prompt = PROMPTS.SCREENER_INTERPRETER(userQuery, AVAILABLE_SECTORS);
-    const interpretation = await geminiClient.generateJSON<ScreenerInterpretation>(prompt);
+    const interpretation = await aiClient.generateJSON<ScreenerInterpretation>(prompt);
 
     logger.info('Screener interpretation', { query: userQuery, filters: interpretation.filters });
 

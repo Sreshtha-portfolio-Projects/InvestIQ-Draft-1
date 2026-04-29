@@ -1,6 +1,6 @@
 # InvestIQ — AI-Powered Stock Research Platform
 
-A production-grade SaaS platform that combines Indian stock market data with Google Gemini AI to deliver institutional-quality investment research.
+A production-grade SaaS platform that combines Indian stock market data with OpenRouter AI to deliver institutional-quality investment research.
 
 ## Overview
 
@@ -43,7 +43,7 @@ InvestIQ is the "ChatGPT for Stock Research" — it interprets financial data us
 - **Node.js + Express**
 - **TypeScript**
 - **Supabase** (PostgreSQL + Auth)
-- **Google Gemini API** (AI analysis)
+- **OpenRouter AI** (AI analysis with multiple model providers)
 - **Finnhub API** (real-time market data)
 - Rate limiting, CORS, Helmet security
 
@@ -75,7 +75,7 @@ InvestIQ/
 └── backend/
     └── src/
         ├── ai/
-        │   ├── geminiClient.ts          # Gemini API wrapper
+        │   ├── aiClient.ts              # OpenRouter AI wrapper
         │   ├── prompts.ts               # Centralized prompt templates
         │   ├── researchAssistant.ts     # AI research pipeline
         │   ├── screenerInterpreter.ts   # NL→filters→DB pipeline
@@ -101,7 +101,7 @@ InvestIQ/
 ### Prerequisites
 - Node.js 18+
 - Supabase account
-- Google AI Studio account (for Gemini API key)
+- OpenRouter account (for AI API key — https://openrouter.ai/keys)
 - Finnhub account (for market data API key — free tier available)
 
 ### 1. Clone and Install
@@ -134,7 +134,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_ANON_KEY=your-anon-key
 
-GEMINI_API_KEY=your-gemini-api-key
+OPENROUTER_API_KEY=your-openrouter-api-key
 FINNHUB_API_KEY=your-finnhub-api-key
 ```
 
@@ -149,7 +149,7 @@ NEXT_PUBLIC_API_URL=http://localhost:4000/api
 
 | Service | URL | Notes |
 |---|---|---|
-| Google Gemini | [aistudio.google.com](https://aistudio.google.com) | Free tier available |
+| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | Pay-as-you-go, supports multiple AI models |
 | Finnhub | [finnhub.io](https://finnhub.io) | Free: 60 requests/minute |
 | Supabase | [supabase.com](https://supabase.com) | Free tier available |
 
@@ -214,9 +214,9 @@ DELETE /api/watchlist/:id       # Remove stock from watchlist
 **AI Pipeline (Research Assistant):**
 ```
 User Question
-    → Fetch company data (DB + Alpha Vantage)
+    → Fetch company data (DB + Finnhub)
     → Build contextual prompt with financial metrics
-    → Gemini API call
+    → OpenRouter AI API call
     → Parse structured JSON response
     → Return to frontend
 ```
@@ -224,7 +224,7 @@ User Question
 **AI Pipeline (Stock Screener):**
 ```
 Natural Language Query
-    → Gemini interprets intent → structured filters
+    → OpenRouter AI interprets intent → structured filters
     → Database query with filters
     → Return matching companies with financials
 ```

@@ -6,6 +6,20 @@ import { sendSuccess, sendError } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
+const aiUpstreamStatus = (message: string): number => {
+  const m = message.toLowerCase();
+  if (
+    m.includes('ai service') ||
+    m.includes('openrouter') ||
+    m.includes('malformed') ||
+    m.includes('quota') ||
+    m.includes('rate limit')
+  ) {
+    return 503;
+  }
+  return 500;
+};
+
 export const askResearchAssistant = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { question, ticker } = req.body;
@@ -22,7 +36,7 @@ export const askResearchAssistant = async (req: AuthenticatedRequest, res: Respo
   } catch (err) {
     const message = err instanceof Error ? err.message : 'AI analysis failed';
     logger.error('Research assistant error', err);
-    sendError(res, message, 500);
+    sendError(res, message, aiUpstreamStatus(message));
   }
 };
 
@@ -42,7 +56,7 @@ export const screenStocks = async (req: Request, res: Response): Promise<void> =
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Screener failed';
     logger.error('Screener error', err);
-    sendError(res, message, 500);
+    sendError(res, message, aiUpstreamStatus(message));
   }
 };
 
@@ -72,7 +86,7 @@ export const analyzeEarnings = async (req: AuthenticatedRequest, res: Response):
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Earnings analysis failed';
     logger.error('Earnings analyzer error', err);
-    sendError(res, message, 500);
+    sendError(res, message, aiUpstreamStatus(message));
   }
 };
 

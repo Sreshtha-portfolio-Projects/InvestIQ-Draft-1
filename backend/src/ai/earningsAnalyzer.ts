@@ -1,4 +1,4 @@
-import { geminiClient } from './geminiClient';
+import { aiClient } from './aiClient';
 import { PROMPTS } from './prompts';
 import { getSupabaseClient } from '../db/supabase';
 import { EarningsAnalysis } from '../types';
@@ -70,7 +70,7 @@ export class EarningsAnalyzerService {
     const primaryChunk = chunks[0];
     const prompt = PROMPTS.EARNINGS_ANALYZER(companyName, ticker, quarter, primaryChunk);
 
-    const analysis = await geminiClient.generateJSON<FullEarningsAnalysis>(prompt);
+    const analysis = await aiClient.generateJSON<FullEarningsAnalysis>(prompt);
 
     // If multiple chunks, merge insights from additional chunks
     if (chunks.length > 1 && chunks[1]) {
@@ -81,7 +81,7 @@ export class EarningsAnalyzerService {
           quarter,
           chunks[1]
         );
-        const additionalAnalysis = await geminiClient.generateJSON<FullEarningsAnalysis>(additionalPrompt);
+        const additionalAnalysis = await aiClient.generateJSON<FullEarningsAnalysis>(additionalPrompt);
 
         // Merge additional signals
         analysis.growth_signals = [
