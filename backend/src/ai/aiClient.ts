@@ -1,11 +1,22 @@
 import axios, { AxiosError } from 'axios';
 import { logger } from '../utils/logger';
 
-/** Default model for OpenRouter; override with AI_MODEL in backend/.env */
-const DEFAULT_AI_MODEL = 'google/gemini-flash-1.5-8b';
+/** Default: OpenRouter free router (zero-cost; see https://openrouter.ai/models?q=free) */
+const DEFAULT_AI_MODEL = 'openrouter/free';
+
+/** Small completion budget keeps free / low-credit accounts under OpenRouter’s affordable reserve */
+const DEFAULT_MAX_COMPLETION_TOKENS = 1024;
 
 /** OpenRouter API endpoint */
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+function parseMaxCompletionTokens(): number {
+  const raw = process.env.AI_MAX_TOKENS?.trim();
+  if (!raw) return DEFAULT_MAX_COMPLETION_TOKENS;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_COMPLETION_TOKENS;
+  return Math.min(n, 32000);
+}
 
 const sanitizeApiMessage = (msg: string): string =>
   msg
@@ -61,7 +72,15 @@ const classifyAIFailure = (err: unknown): { code: AIFailureKind; detail: string 
       return { code: 'MODEL', detail: `${err.response.status} ${errorMsg}` };
     }
 
-    // Rate limit / quota
+    // Billing / credits (OpenRouter 402)
+    if (
+      err.response.status === 402 ||
+      errorLower.includes('credits') ||
+      (errorLower.includes('afford') && errorLower.includes('token'))
+    ) {
+      return { code: 'UPSTREAM', detail: `${err.response.status} ${errorMsg}` };
+    }
+
     if (
       errorLower.includes('rate') ||
       errorLower.includes('quota') ||
@@ -124,9 +143,23 @@ const buildUserFacingAIError = (
   }
 
   if (classified.code === 'UPSTREAM') {
-    const base = safeDetail.toLowerCase().includes('quota') || safeDetail.toLowerCase().includes('rate') || safeDetail.toLowerCase().includes('429')
-      ? 'AI service rate limit or quota reached. Wait a minute and try again.'
-      : 'AI service request failed. Retry shortly.';
+    const low = safeDetail.toLowerCase();
+    const billing =
+      low.includes('402') ||
+      low.includes('credits') ||
+      low.includes('afford') ||
+      (low.includes('max_tokens') && low.includes('afford'));
+
+    if (billing) {
+      const msg =
+        'OpenRouter rejected the request (credits or completion budget). Defaults use the free model and 1024 output tokens; lower AI_MAX_TOKENS or add credits at openrouter.ai/settings/credits.';
+      return isProd ? msg : `${msg} Details: ${safeDetail}`;
+    }
+
+    const base =
+      low.includes('quota') || low.includes('rate') || low.includes('429')
+        ? 'AI service rate limit or quota reached. Wait a minute and try again.'
+        : 'AI service request failed. Retry shortly.';
     return isProd ? base : `${base} Details: ${safeDetail}`;
   }
 
@@ -161,6 +194,7 @@ interface OpenRouterResponse {
 
 class AIClient {
   private readonly modelId: string;
+  private readonly maxCompletionTokens: number;
   private readonly apiKey: string | undefined;
   private readonly siteUrl: string;
   private readonly siteName: string;
@@ -168,6 +202,7 @@ class AIClient {
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY?.trim();
     this.modelId = (process.env.AI_MODEL || DEFAULT_AI_MODEL).trim();
+    this.maxCompletionTokens = parseMaxCompletionTokens();
     this.siteUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     this.siteName = 'InvestIQ';
 
@@ -177,6 +212,7 @@ class AIClient {
 
     logger.info('OpenRouter AI client initialized', {
       model: this.modelId,
+      maxCompletionTokens: this.maxCompletionTokens,
       hasApiKey: !!this.apiKey,
       provider: 'OpenRouter',
     });
@@ -200,6 +236,7 @@ class AIClient {
         {
           model: this.modelId,
           messages,
+          max_tokens: this.maxCompletionTokens,
         },
         {
           headers: {

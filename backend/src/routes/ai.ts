@@ -2,9 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import {
   askResearchAssistant,
+  routeAiQuery,
   screenStocks,
+  classifyIntent,
   analyzeEarnings,
   getEarningsAnalysis,
+  relativeValuation,
 } from '../controllers/aiController';
 import { authenticate, optionalAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -24,9 +27,43 @@ const researchSchema = z.object({
   ticker: z.string().optional(),
 });
 
+const intentSchema = z.object({
+  query: z.string().min(3).max(500),
+});
+
 const screenerSchema = z.object({
   query: z.string().min(3).max(300),
 });
+
+const peerRangeSchema = z
+  .object({
+    min: z.number(),
+    max: z.number(),
+  })
+  .optional();
+
+const relativeValuationSchema = z
+  .object({
+    company_name: z.string().min(1).max(200),
+    current_pe: z.number().positive(),
+    historical_pe_range: z.object({
+      min: z.number().positive(),
+      max: z.number().positive(),
+    }),
+    historical_median_pe: z.number().positive(),
+    peer_pe_range: peerRangeSchema,
+    revenue_growth: z.number(),
+    roe: z.number(),
+    sector: z.string().min(1).max(120),
+  })
+  .refine((d) => d.historical_pe_range.min <= d.historical_pe_range.max, {
+    message: 'historical_pe_range.min must be <= max',
+    path: ['historical_pe_range'],
+  })
+  .refine((d) => d.peer_pe_range == null || d.peer_pe_range.min <= d.peer_pe_range.max, {
+    message: 'peer_pe_range.min must be <= max',
+    path: ['peer_pe_range'],
+  });
 
 const earningsSchema = z.object({
   companyId: z.string().uuid(),
@@ -80,6 +117,30 @@ const earningsSchema = z.object({
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/research', aiRateLimit, optionalAuth, validateBody(researchSchema), askResearchAssistant);
+
+/**
+ * @swagger
+ * /api/ai/query:
+ *   post:
+ *     summary: Classify intent and run screener, valuation, research, or comparison
+ *     tags: [AI]
+ */
+router.post('/query', aiRateLimit, optionalAuth, validateBody(researchSchema), routeAiQuery);
+
+/**
+ * @swagger
+ * /api/ai/valuation/relative:
+ *   post:
+ *     summary: Relative P/E valuation vs history (rules + context), not absolute PE screens
+ *     tags: [AI]
+ */
+router.post(
+  '/valuation/relative',
+  aiRateLimit,
+  optionalAuth,
+  validateBody(relativeValuationSchema),
+  relativeValuation
+);
 
 /**
  * @swagger
@@ -138,6 +199,30 @@ router.post('/research', aiRateLimit, optionalAuth, validateBody(researchSchema)
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/screen', aiRateLimit, validateBody(screenerSchema), screenStocks);
+
+/**
+ * @swagger
+ * /api/ai/intent:
+ *   post:
+ *     summary: Classify user query intent (screener vs analysis vs valuation vs comparison)
+ *     tags: [AI]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [query]
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 minLength: 3
+ *                 maxLength: 500
+ *     responses:
+ *       200:
+ *         description: Intent classification result
+ */
+router.post('/intent', aiRateLimit, validateBody(intentSchema), classifyIntent);
 
 /**
  * @swagger

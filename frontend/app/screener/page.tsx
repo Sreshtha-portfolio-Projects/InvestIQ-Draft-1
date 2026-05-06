@@ -164,12 +164,32 @@ export default function ScreenerPage() {
       {/* Results */}
       {result && (
         <div className="space-y-5">
-          {/* Interpretation */}
+          {/* Interpretation + analyst insights */}
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-4">
             <div className="flex items-start gap-3">
               <Sparkles className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-              <div className="space-y-2">
-                <p className="text-sm text-blue-100">{result.interpretation}</p>
+              <div className="space-y-3 w-full">
+                {result.interpretation && (
+                  <p className="text-sm text-blue-100">{result.interpretation}</p>
+                )}
+                {result.insights && (
+                  <p className="text-sm text-slate-300 leading-relaxed border-t border-blue-500/15 pt-3">
+                    {result.insights}
+                  </p>
+                )}
+                {result.warnings && result.warnings.length > 0 && (
+                  <ul className="text-xs text-amber-200/90 space-y-1.5 list-disc list-inside border-t border-amber-500/20 pt-3">
+                    {result.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+                {result.reason_for_relaxation && (
+                  <p className="text-xs text-slate-400 border-t border-slate-700 pt-3">
+                    <span className="text-slate-500">Adjusted run: </span>
+                    {result.reason_for_relaxation}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <FilterBadge label="Max P/E" value={result.applied_filters?.max_pe as string | number | null} />
                   <FilterBadge label="Min Revenue Growth" value={result.applied_filters?.min_revenue_growth ? `${result.applied_filters.min_revenue_growth}%` : null} />
@@ -178,6 +198,16 @@ export default function ScreenerPage() {
                   <FilterBadge label="Min ROE" value={result.applied_filters?.min_roe ? `${result.applied_filters.min_roe}%` : null} />
                   <FilterBadge label="Market Cap" value={result.applied_filters?.market_cap_category as string} />
                 </div>
+                {result.relaxed_filters && (
+                  <div className="flex flex-wrap gap-2 pt-1 border-t border-blue-500/15">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 w-full">Relaxed filters used</span>
+                    <FilterBadge label="Max P/E" value={result.relaxed_filters.max_pe as number | null} />
+                    <FilterBadge label="Min Revenue Growth" value={result.relaxed_filters.min_revenue_growth ? `${result.relaxed_filters.min_revenue_growth}%` : null} />
+                    <FilterBadge label="Max D/E" value={result.relaxed_filters.max_debt_to_equity as number | null} />
+                    <FilterBadge label="Min ROE" value={result.relaxed_filters.min_roe ? `${result.relaxed_filters.min_roe}%` : null} />
+                    <FilterBadge label="Market Cap" value={result.relaxed_filters.market_cap_category as string} />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -198,10 +228,22 @@ export default function ScreenerPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
+            <div className="text-center py-12 space-y-3">
               <Search className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400">No stocks matched your criteria.</p>
-              <p className="text-sm text-slate-600 mt-1">Try adjusting your query or using different filters.</p>
+              <p className="text-slate-400">No stocks matched your criteria in this dataset.</p>
+              {result.insights && (
+                <p className="text-sm text-slate-500 max-w-lg mx-auto">{result.insights}</p>
+              )}
+              {result.alternative_strategies && result.alternative_strategies.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs text-slate-600 mb-2">Alternative angles to try:</p>
+                  <ul className="text-sm text-slate-400 space-y-1 max-w-md mx-auto text-left list-decimal list-inside">
+                    {result.alternative_strategies.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {result.suggestions?.length > 0 && (
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {result.suggestions.map((s, i) => (
