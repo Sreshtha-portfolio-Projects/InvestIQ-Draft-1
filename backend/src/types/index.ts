@@ -10,6 +10,7 @@ export interface Company {
   ticker: string;
   sector: string;
   market_cap?: number;
+  aliases?: string[];
 }
 
 export interface Financials {

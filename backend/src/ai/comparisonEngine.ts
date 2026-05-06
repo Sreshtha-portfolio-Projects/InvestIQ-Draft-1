@@ -4,21 +4,29 @@ import { fetchCompanyResearchBundle, extractTickersFromText } from './companyCon
 import type { ComparisonEngineResult, IntentClassificationResult } from '../types';
 import { logger } from '../utils/logger';
 
-function resolvePair(
+async function resolvePair(
   question: string,
   intent: IntentClassificationResult
-): [string, string] | null {
-  const fromText = extractTickersFromText(question, 2);
+): Promise<[string, string] | null> {
+  const entityLine = intent.entities.companies
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .join(' vs ');
+  const combined = entityLine ? `${entityLine}\n${question}` : question;
+
+  const fromCombined = await extractTickersFromText(combined, 5);
+  if (fromCombined.length >= 2) {
+    return [fromCombined[0], fromCombined[1]];
+  }
+
+  const fromText = await extractTickersFromText(question, 5);
   if (fromText.length >= 2) {
     return [fromText[0], fromText[1]];
   }
 
-  const normalizedEntities = intent.entities.companies
-    .map((c) => c.trim())
-    .filter(Boolean);
-
+  const normalizedEntities = intent.entities.companies.map((c) => c.trim()).filter(Boolean);
   const synthetic = [...normalizedEntities, question].join(' ');
-  const fromEntities = extractTickersFromText(synthetic, 2);
+  const fromEntities = await extractTickersFromText(synthetic, 5);
   if (fromEntities.length >= 2) {
     return [fromEntities[0], fromEntities[1]];
   }
@@ -29,7 +37,7 @@ function resolvePair(
 export class ComparisonEngineService {
   async compare(request: { question: string; intent: IntentClassificationResult }): Promise<ComparisonEngineResult> {
     const { question, intent } = request;
-    const pair = resolvePair(question, intent);
+    const pair = await resolvePair(question, intent);
 
     if (!pair) {
       return {

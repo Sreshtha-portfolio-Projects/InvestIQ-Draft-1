@@ -29,7 +29,7 @@ export class ResearchAssistantService {
   async analyze(request: ResearchRequest): Promise<ResearchResult> {
     const { question, ticker } = request;
 
-    const resolvedTicker = ticker || extractFirstTicker(question);
+    const resolvedTicker = ticker || (await extractFirstTicker(question));
 
     let financials: Record<string, unknown> = {};
     let marketData: Record<string, unknown> = {};

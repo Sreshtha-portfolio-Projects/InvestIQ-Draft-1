@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Companies table
+-- Companies table. Fuzzy search: run supabase/migrations/*_companies_aliases_fuzzy.sql
 CREATE TABLE IF NOT EXISTS public.companies (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   name TEXT NOT NULL,
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.companies (
   sector TEXT,
   industry TEXT,
   market_cap BIGINT,
+  aliases TEXT[] DEFAULT '{}',
   description TEXT,
   website TEXT,
   country TEXT DEFAULT 'IN',

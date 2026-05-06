@@ -8,7 +8,7 @@ import { logger } from '../utils/logger';
 export class ValuationAnalysisService {
   async analyze(request: { question: string; ticker?: string }): Promise<ValuationAnalysisResult> {
     const { question, ticker } = request;
-    const resolvedTicker = ticker || extractFirstTicker(question);
+    const resolvedTicker = ticker || (await extractFirstTicker(question));
 
     let companyName = resolvedTicker || 'Unknown Company';
     let sector = 'Unknown';
